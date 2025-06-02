@@ -1,11 +1,12 @@
+import json
 import requests
 from bs4 import BeautifulSoup
 from concurrent.futures import ThreadPoolExecutor
 import time
 
 BASE_URL = "https://abisezerano.com"
-MAX_PAGES = 20  # Limit to avoid hitting server too hard
-MAX_WORKERS = 5  # Number of concurrent threads
+MAX_PAGES = 20
+MAX_WORKERS = 5
 
 headers = {
     'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
@@ -41,16 +42,20 @@ def main():
         print(f"Fetching article links from: {BASE_URL}/page/{page}/")
         links = fetch_article_links(page)
         all_article_links.extend(links)
-        time.sleep(1)  # polite delay between pages
+        time.sleep(1)
 
-    # Scrape all articles concurrently
     print(f"\nScraping {len(all_article_links)} articles...\n")
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
         results = list(executor.map(scrape_article, all_article_links))
 
-    # Filter out failed scrapes
     articles = [r for r in results if r]
+
     print(f"\n✅ Successfully scraped {len(articles)} articles")
+
+    # Save scraped articles to JSON
+    with open("articles.json", "w", encoding="utf-8") as f:
+        json.dump(articles, f, ensure_ascii=False, indent=4)
+    print("Articles saved to articles.json")
 
 if __name__ == "__main__":
     main()
