@@ -4,7 +4,6 @@ from bs4 import BeautifulSoup
 import time
 
 BASE_URL = "https://abisezerano.com"
-MAX_PAGES = 2
 
 headers = {
     'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
@@ -57,10 +56,16 @@ def fetch_titles_and_contents(page_num):
 
 def main():
     all_articles = []
-    for page in range(1, MAX_PAGES + 1):
+    page = 1
+
+    while True:
         articles = fetch_titles_and_contents(page)
+        if not articles:
+            print(f"🚫 No more articles found at page {page}. Stopping.")
+            break
         all_articles.extend(articles)
-        time.sleep(1)  # polite pause between pages
+        page += 1
+        time.sleep(1)
 
     if not all_articles:
         print("⚠️ No articles found.")
