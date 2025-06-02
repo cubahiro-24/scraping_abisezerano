@@ -2,10 +2,11 @@ import json
 import requests
 from bs4 import BeautifulSoup
 from concurrent.futures import ThreadPoolExecutor
+from urllib.parse import urljoin
 import time
 
 BASE_URL = "https://abisezerano.com"
-MAX_PAGES = 20
+MAX_PAGES = 2
 MAX_WORKERS = 5
 
 headers = {
@@ -18,7 +19,10 @@ def fetch_article_links(page_num):
         response = requests.get(url, headers=headers, timeout=10)
         response.raise_for_status()
         soup = BeautifulSoup(response.content, "html.parser")
-        return [a['href'] for a in soup.select('h2.entry-title a')]
+        links = [a['href'] for a in soup.select('h2.entry-title a')]
+        full_links = [urljoin(BASE_URL, link) for link in links]  # convert to full URLs
+        print(f"Found {len(full_links)} links on page {page_num}")
+        return full_links
     except Exception as e:
         print(f"Error fetching page {page_num}: {e}")
         return []
@@ -29,8 +33,13 @@ def scrape_article(url):
         response = requests.get(url, headers=headers, timeout=10)
         response.raise_for_status()
         soup = BeautifulSoup(response.content, "html.parser")
-        title = soup.find("h1", class_="entry-title").text.strip()
-        content = soup.find("div", class_="entry-content").text.strip()
+        title_tag = soup.find("h1", class_="entry-title")
+        content_tag = soup.find("div", class_="entry-content")
+        if not title_tag or not content_tag:
+            print(f"Missing title or content on {url}")
+            return None
+        title = title_tag.text.strip()
+        content = content_tag.text.strip()
         return {"url": url, "title": title, "content": content}
     except Exception as e:
         print(f"Error scraping {url}: {e}")
@@ -43,6 +52,11 @@ def main():
         links = fetch_article_links(page)
         all_article_links.extend(links)
         time.sleep(1)
+
+    print(f"\nTotal article links collected: {len(all_article_links)}")
+    if not all_article_links:
+        print("No article links found. Exiting.")
+        return
 
     print(f"\nScraping {len(all_article_links)} articles...\n")
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
