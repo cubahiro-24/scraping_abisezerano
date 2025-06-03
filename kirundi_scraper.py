@@ -1,9 +1,9 @@
 import json
+import os
 import requests
 from bs4 import BeautifulSoup
 import time
 import random
-import os
 
 BASE_URL = "https://abisezerano.com"
 OUTPUT_FILE = "articles.json"
@@ -23,12 +23,10 @@ def retry_request(url, retries=3, delay=2, backoff=2):
             return response
         except requests.RequestException as e:
             print(f"⚠️ Retry {attempt+1} failed for {url}: {e}")
-            if attempt < retries - 1:
-                time.sleep(delay)
-                delay *= backoff
-            else:
-                with open(ERROR_LOG, "a") as log_file:
-                    log_file.write(f"{url} - {e}\n")
+            time.sleep(delay)
+            delay *= backoff
+    with open(ERROR_LOG, "a") as f:
+        f.write(f"{url} - Failed after retries\n")
     return None
 
 def fetch_article_content(url):
@@ -36,15 +34,12 @@ def fetch_article_content(url):
     response = retry_request(url)
     if not response:
         return "[Error fetching content]"
-    
     soup = BeautifulSoup(response.content, "html.parser")
     content_div = soup.find("div", class_="entry-content")
     if content_div:
         paragraphs = content_div.find_all("p")
-        content_text = "\n\n".join(p.get_text(strip=True) for p in paragraphs if p.get_text(strip=True))
-        return content_text
-    else:
-        return "[No content found]"
+        return "\n\n".join(p.get_text(strip=True) for p in paragraphs if p.get_text(strip=True))
+    return "[No content found]"
 
 def fetch_titles_and_contents(page_num):
     url = f"{BASE_URL}/page/{page_num}/"
@@ -52,22 +47,23 @@ def fetch_titles_and_contents(page_num):
     response = retry_request(url)
     if not response:
         return []
-
+    
     soup = BeautifulSoup(response.content, "html.parser")
-    results = []
-    for h1_tag in soup.select("h1.entry-title"):
-        a_tag = h1_tag.find("a")
+    articles = []
+
+    for h1 in soup.select("h1.entry-title"):
+        a_tag = h1.find("a")
         if a_tag:
             title = a_tag.get_text(strip=True)
-            link = a_tag.get("href")
+            link = a_tag["href"]
             content = fetch_article_content(link)
-            results.append({
+            articles.append({
                 "title": title,
                 "link": link,
                 "content": content
             })
             time.sleep(random.uniform(1, 2.5))  # respectful pause
-    return results
+    return articles
 
 def load_existing_articles():
     if os.path.exists(OUTPUT_FILE):
@@ -77,25 +73,25 @@ def load_existing_articles():
 
 def main():
     all_articles = load_existing_articles()
-    page = (len(all_articles) // 10) + 1  # resume from last checkpoint
+    start_page = (len(all_articles) // 10) + 1  # assuming ~10 articles/page
+    page = start_page
 
     while True:
-        articles = fetch_titles_and_contents(page)
-        if not articles:
-            print(f"🚫 No more articles found at page {page}. Stopping.")
+        new_articles = fetch_titles_and_contents(page)
+        if not new_articles:
+            print(f"🚫 No articles found at page {page}. Ending scrape.")
             break
-        all_articles.extend(articles)
+        all_articles.extend(new_articles)
 
-        # Save after each page
         with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
             json.dump(all_articles, f, ensure_ascii=False, indent=4)
-        print(f"💾 Saved {len(all_articles)} articles so far.")
+        print(f"💾 Progress saved. Total articles: {len(all_articles)}")
 
         page += 1
-        time.sleep(random.uniform(1, 2.5))
+        time.sleep(random.uniform(1.5, 3))
 
-    print(f"\n✅ Finished scraping. Total articles: {len(all_articles)}")
-    print(f"📝 Articles saved to {OUTPUT_FILE}")
+    print("\n✅ Scraping completed successfully.")
+    print(f"📁 Articles saved in '{OUTPUT_FILE}'")
 
 if __name__ == "__main__":
     main()
